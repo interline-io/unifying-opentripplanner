@@ -1,0 +1,317 @@
+diff --cc pom.xml
+index e8de95e8e,fdc4976e1..000000000
+--- a/pom.xml
++++ b/pom.xml
+@@@ -8,7 -8,7 +8,11 @@@
+  
+      <groupId>org.opentripplanner</groupId>
+      <artifactId>otp</artifactId>
+++<<<<<<< HEAD
+ +    <version>1.2.0.12-SNAPSHOT</version>
+++=======
++     <version>1.3.0-SNAPSHOT</version>
+++>>>>>>> origin/master
+      <packaging>jar</packaging>
+  
+      <licenses>
+@@@ -424,14 -424,14 +429,25 @@@
+              <url>https://people.apache.org/repo/m1-ibiblio-rsync-repository/org.apache.axis2/</url>
+          </repository>
+          <repository>
+++<<<<<<< HEAD
+ +            <id>snapshots-nexus-repo</id>
+ +            <name>Nexus Snapshots Repo</name>
+ +            <url>http://nexus.onebusaway.org/content/repositories/snapshots/</url>
+ +        </repository>
+ +        <repository>
+ +            <id>releases-nexus-repo</id>
+ +            <name>Nexus Snapshots Repo</name>
+ +            <url>http://nexus.onebusaway.org/content/repositories/releases/</url>
+++=======
++           <id>sonatype-oss</id>
++           <name>Sonatype OSS</name>
++           <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
++         </repository>
++         <repository>
++             <id>conveyal</id>
++             <name>Conveyal Maven Repository</name>
++             <url>https://maven.conveyal.com/</url>
+++>>>>>>> origin/master
+          </repository>
+      </repositories>
+  
+@@@ -800,7 -799,7 +815,11 @@@
+          <dependency>
+              <groupId>com.conveyal</groupId>
+              <artifactId>r5</artifactId>
+++<<<<<<< HEAD
+ +            <version>0.1</version>
+++=======
++             <version>4.0.0-SNAPSHOT</version>
+++>>>>>>> origin/master
+              <exclusions>
+                  <exclusion>
+                      <artifactId>slf4j-simple</artifactId>
+diff --cc src/main/java/org/opentripplanner/graph_builder/GraphBuilder.java
+index 1fa5ae3c8,0207ad583..000000000
+--- a/src/main/java/org/opentripplanner/graph_builder/GraphBuilder.java
++++ b/src/main/java/org/opentripplanner/graph_builder/GraphBuilder.java
+@@@ -317,10 -309,7 +317,14 @@@ public class GraphBuilder implements Ru
+              // The stops can be linked to each other once they are already linked to the street network.
+              if ( ! builderParams.useTransfersTxt) {
+                  // This module will use streets or straight line distance depending on whether OSM data is found in the graph.
+++<<<<<<< HEAD
+ +                graphBuilder.addModule(new DirectTransferGenerator());
+ +                if (hasOSM && builderParams.createFlexTransfers) {
+ +                    graphBuilder.addModule(new FlexDirectTransferGenerator());
+ +                }
+++=======
++                 graphBuilder.addModule(new DirectTransferGenerator(builderParams.maxTransferDistance));
+++>>>>>>> origin/master
+              }
+          }
+          graphBuilder.addModule(new EmbedConfig(builderConfig, routerConfig));
+diff --cc src/main/java/org/opentripplanner/routing/edgetype/factory/GTFSPatternHopFactory.java
+index d91b3b848,86a7c3292..000000000
+--- a/src/main/java/org/opentripplanner/routing/edgetype/factory/GTFSPatternHopFactory.java
++++ b/src/main/java/org/opentripplanner/routing/edgetype/factory/GTFSPatternHopFactory.java
+@@@ -31,7 -31,7 +31,11 @@@ import gnu.trove.list.array.TIntArrayLi
+  import org.apache.commons.math3.util.FastMath;
+  import org.onebusaway.gtfs.model.Agency;
+  import org.onebusaway.gtfs.model.AgencyAndId;
+++<<<<<<< HEAD
+ +import org.onebusaway.gtfs.model.Area;
+++=======
++ import org.onebusaway.gtfs.model.FeedInfo;
+++>>>>>>> origin/master
+  import org.onebusaway.gtfs.model.Frequency;
+  import org.onebusaway.gtfs.model.Pathway;
+  import org.onebusaway.gtfs.model.Route;
+@@@ -1492,30 -1495,56 +1521,84 @@@ public class GTFSPatternHopFactory 
+          this.maxStopToShapeSnapDistance = maxStopToShapeSnapDistance;
+      }
+  
+++<<<<<<< HEAD
+ +    private void loadAreaMap() {
+ +        for (Area area : _dao.getAllAreas()) {
+ +            Geometry geometry = GeometryUtils.parseWkt(area.getWkt());
+ +            _areasById.put(area.getAreaId(), geometry);
+ +        }
+ +    }
+ +
+ +    private void loadAreasIntoGraph(Graph graph) {
+ +        for (Map.Entry<String, Geometry> entry : _areasById.entrySet()) {
+ +            AgencyAndId id = new AgencyAndId(_feedId.getId(), entry.getKey());
+ +            graph.areasById.put(id, entry.getValue());
+ +        }
+ +    }
+ +
+ +    private boolean hasDemandService(List<StopTime> stopTimes) {
+ +        if (stopTimes.size() != 2)
+ +            return false;
+ +        StopTime st0 = stopTimes.get(0);
+ +        StopTime st1 = stopTimes.get(1);
+ +        return st0.getStartServiceArea() != null
+ +                && st0.getStartServiceArea().equals(st1.getEndServiceArea());
+ +    }
+ +
+ +    private void addDemandService(Graph graph, Trip trip, StopTime st0, StopTime st1) {
+ +        graph.demandResponseServices.add(new DemandResponseService(trip, st0, st1));
+++=======
++     private Collection<Transfer> expandTransfer (Transfer source) {
++         Stop fromStop = source.getFromStop();
++         Stop toStop = source.getToStop();
++ 
++         if (fromStop.getLocationType() == STOP_LOCATION_TYPE && toStop.getLocationType() == STOP_LOCATION_TYPE) {
++             // simple, no need to copy anything
++             return Arrays.asList(source);
++         } else {
++             // at least one of the stops is a parent station
++             // all the stops this transfer originates with
++             List<Stop> fromStops;
++ 
++             // all the stops this transfer terminates with
++             List<Stop> toStops;
++ 
++             if (fromStop.getLocationType() == PARENT_STATION_LOCATION_TYPE) {
++                 fromStops = _dao.getStopsForStation(fromStop);
++             } else {
++                 fromStops = Arrays.asList(fromStop);
++             }
++ 
++             if (toStop.getLocationType() == PARENT_STATION_LOCATION_TYPE) {
++                 toStops = _dao.getStopsForStation(toStop);
++             } else {
++                 toStops = Arrays.asList(toStop);
++             }
++ 
++             List<Transfer> expandedTransfers = new ArrayList<>(fromStops.size() * toStops.size());
++ 
++             for (Stop expandedFromStop : fromStops) {
++                 for (Stop expandedToStop : toStops) {
++                     Transfer expanded = new Transfer(source);
++                     expanded.setFromStop(expandedFromStop);
++                     expanded.setToStop(expandedToStop);
++                     expandedTransfers.add(expanded);
++                 }
++             }
++ 
++             LOG.info(
++                     "Expanded transfer between stations \"{} ({})\" and \"{} ({})\" to {} transfers between {} and {} stops",
++                     fromStop.getName(),
++                     fromStop.getId(),
++                     toStop.getName(),
++                     toStop.getId(),
++                     expandedTransfers.size(),
++                     fromStops.size(),
++                     toStops.size()
++                     );
++ 
++             return expandedTransfers;
++         }
+++>>>>>>> origin/master
+      }
+  }
+diff --cc src/main/java/org/opentripplanner/routing/graph/Graph.java
+index 057f4746f,1c95c17a4..000000000
+--- a/src/main/java/org/opentripplanner/routing/graph/Graph.java
++++ b/src/main/java/org/opentripplanner/routing/graph/Graph.java
+@@@ -209,14 -209,8 +214,19 @@@ public class Graph implements Serializa
+      /** The difference in meters between the WGS84 ellipsoid height and geoid height at the graph's center */
+      public Double ellipsoidToGeoidDifference = 0.0;
+  
+++<<<<<<< HEAD
+ +    /** Whether to use flex modes */
+ +    public boolean useFlexService = false;
+ +
+ +    /** Available demand-based services */
+ +    public List<DemandResponseService> demandResponseServices = new ArrayList<>();
+ +
+ +    /** Areas for flex service */
+ +    public Map<AgencyAndId, Geometry> areasById = new HashMap<>();
+++=======
++     /** Parent stops **/
++     public Map<AgencyAndId, Stop> parentStopById = new HashMap<>();
+++>>>>>>> origin/master
+  
+      public Graph(Graph basedOn) {
+          this();
+@@@ -923,8 -921,8 +937,13 @@@
+          this.feedIds.add(feedId);
+      }
+  
+++<<<<<<< HEAD
+ +    public void addArea(String feedId, String areaId, Polygon area) {
+ +        this.areasById.put(new AgencyAndId(feedId, areaId), area);
+++=======
++     public void addFeedInfo(FeedInfo info) {
++         this.feedInfoForId.put(info.getId().toString(), info);
+++>>>>>>> origin/master
+      }
+  
+      /**
+diff --cc src/main/java/org/opentripplanner/routing/graph/GraphIndex.java
+index 0b78cbcf7,6a79f028a..000000000
+--- a/src/main/java/org/opentripplanner/routing/graph/GraphIndex.java
++++ b/src/main/java/org/opentripplanner/routing/graph/GraphIndex.java
+@@@ -10,6 -7,7 +10,10 @@@ import java.util.List
+  import java.util.Map;
+  import java.util.Set;
+  import java.util.Calendar;
+++<<<<<<< HEAD
+++=======
++ 
+++>>>>>>> origin/master
+  import com.google.common.collect.HashMultimap;
+  import com.google.common.collect.Lists;
+  import com.google.common.collect.Maps;
+@@@ -67,12 -59,11 +72,19 @@@ import org.slf4j.Logger
+  import org.slf4j.LoggerFactory;
+  
+  import javax.ws.rs.core.Response;
+++<<<<<<< HEAD
+ +import java.util.Date;
+ +import java.util.HashMap;
+ +import java.util.HashSet;
+ +import java.util.TreeMap;
+++=======
++ import java.util.ArrayList;
++ import java.util.Date;
++ import java.util.HashMap;
++ import java.util.HashSet;
+++>>>>>>> origin/master
+  import java.util.concurrent.Executors;
+ +import java.util.stream.Collectors;
+  
+  /**
+   * This class contains all the transient indexes of graph elements -- those that are not
+@@@ -615,7 -574,19 +621,23 @@@ public class GraphIndex 
+          }
+      }
+  
+++<<<<<<< HEAD
+ +    private void clusterByProximity() {	
+++=======
++     /**
++      * Cluster stops by proximity and name.
++      * This functionality was developed for the Washington, DC area and probably will not work anywhere else in the
++      * world. It depends on the exact way stops are named and the way street intersections are named in that geographic
++      * region and in the GTFS data sets which represent it. Based on comments, apparently it might work for TriMet
++      * as well.
++      *
++      * We can't use a name similarity comparison, we need exact matches. This is because many street names differ by
++      * only one letter or number, e.g. 34th and 35th or Avenue A and Avenue B. Therefore normalizing the names before
++      * the comparison is essential. The agency must provide either parent station information or a well thought out stop
++      * naming scheme to cluster stops -- no guessing is reasonable without that information.
++      */
++     private void clusterByProximityAndName() {
+++>>>>>>> origin/master
+      	int psIdx = 0; // unique index for next parent stop
+  	    LOG.info("Clustering stops by geographic proximity and name...");
+  	    // Each stop without a cluster will greedily claim other stops without clusters.
+diff --cc src/main/java/org/opentripplanner/standalone/GraphBuilderParameters.java
+index 7d9a1c52f,be6d5d010..000000000
+--- a/src/main/java/org/opentripplanner/standalone/GraphBuilderParameters.java
++++ b/src/main/java/org/opentripplanner/standalone/GraphBuilderParameters.java
+@@@ -142,21 -153,9 +153,27 @@@ public class GraphBuilderParameters 
+      public final boolean banDiscouragedBiking;
+  
+      /**
+++<<<<<<< HEAD
+ +     * Whether to run FlexDirectTransferGenerator to create flex transfers. This can take a long
+ +     * time and is only necessary if flex routing is used and there are not designated transfer
+ +     * points.
+ +     */
+ +    public final boolean createFlexTransfers;
+ +
+ +    /**
+ +     * Message for out of area
+ +     */
+ +    public final String outOfAreaMessage;
+ +
+ +    /**
+ +     * Message for trip plan in past
+ +     */
+ +    public final String tripPlanInPastMessage;
+++=======
++      * Transfers up to this length in meters will be pre-calculated and included in the Graph.
++      */
++     public final double maxTransferDistance;
+++>>>>>>> origin/master
+  
+      /**
+       * Set all parameters from the given Jackson JSON tree, applying defaults.
+@@@ -190,9 -189,7 +207,13 @@@
+          pruningThresholdIslandWithStops = config.path("islandWithStopsMaxSize").asInt(5);
+          banDiscouragedWalking = config.path("banDiscouragedWalking").asBoolean(false);
+          banDiscouragedBiking = config.path("banDiscouragedBiking").asBoolean(false);
+++<<<<<<< HEAD
+ +        createFlexTransfers = config.path("createFlexTransfers").asBoolean(false);
+ +        outOfAreaMessage = config.path("outOfAreaMessage").asText("One or more endpoints is out of area.");
+ +        tripPlanInPastMessage = config.path("tripPlanInPastMessage").asText();
+++=======
++         maxTransferDistance = config.path("maxTransferDistance").asDouble(2000);
+++>>>>>>> origin/master
+      }
+  
+  }

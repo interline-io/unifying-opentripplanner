@@ -1,0 +1,60 @@
+diff --cc pom.xml
+index de9eececd,fdc4976e1..000000000
+--- a/pom.xml
++++ b/pom.xml
+@@@ -564,7 -569,7 +569,11 @@@
+          <dependency>
+              <groupId>junit</groupId>
+              <artifactId>junit</artifactId>
+++<<<<<<< HEAD
+ +            <version>4.12</version>
+++=======
++             <version>4.11</version>
+++>>>>>>> origin/master
+              <scope>test</scope>
+          </dependency>
+          <dependency>
+diff --cc src/main/java/org/opentripplanner/routing/core/State.java
+index bc42b7f09,094bd12bc..000000000
+--- a/src/main/java/org/opentripplanner/routing/core/State.java
++++ b/src/main/java/org/opentripplanner/routing/core/State.java
+@@@ -13,6 -13,9 +13,12 @@@
+  
+  package org.opentripplanner.routing.core;
+  
+++<<<<<<< HEAD
+++=======
++ import java.util.Date;
++ import java.util.Set;
++ 
+++>>>>>>> origin/master
+  import org.onebusaway.gtfs.model.AgencyAndId;
+  import org.onebusaway.gtfs.model.Stop;
+  import org.onebusaway.gtfs.model.Trip;
+@@@ -732,16 -719,15 +742,25 @@@ public class State implements Cloneabl
+                  // propagate the modes through to the reversed edge
+                  editor.setBackMode(orig.getBackMode());
+  
+++<<<<<<< HEAD
+ +                State origBackState = orig.getBackState();
+ +
+ +                if (orig.isBikeRenting() != origBackState.isBikeRenting())
+ +                    editor.setBikeRenting(!orig.isBikeRenting());
+ +                if (orig.isCarParked() != origBackState.isCarParked())
+++=======
++                 if (orig.isBikeRenting() && !orig.getBackState().isBikeRenting()) {
++                     editor.doneVehicleRenting();
++                 } else if (!orig.isBikeRenting() && orig.getBackState().isBikeRenting()) {
++                     editor.beginVehicleRenting(((BikeRentalStationVertex)orig.vertex).getVehicleMode());
++                 }
++                 if (orig.isCarParked() != orig.getBackState().isCarParked())
+++>>>>>>> origin/master
+                      editor.setCarParked(!orig.isCarParked());
+ -                if (orig.isBikeParked() != orig.getBackState().isBikeParked())
+ +                if (orig.isBikeParked() != origBackState.isBikeParked())
+                      editor.setBikeParked(!orig.isBikeParked());
+ +                if (orig.isUsingHailedCar() != origBackState.isUsingHailedCar())
+ +                    editor.setUsingHailedCar(!orig.isUsingHailedCar());
+  
+                  editor.setNumBoardings(getNumBoardings() - orig.getNumBoardings());
+  

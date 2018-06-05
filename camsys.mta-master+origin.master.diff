@@ -1,0 +1,536 @@
+diff --cc pom.xml
+index f5c69a89a,fdc4976e1..000000000
+--- a/pom.xml
++++ b/pom.xml
+@@@ -254,9 -251,9 +254,9 @@@
+              <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-surefire-plugin</artifactId>
+-                 <version>2.12</version>
++                 <version>2.21.0</version>
+                  <configuration>
+ -                    <argLine>-Xmx2G</argLine>
+ +                    <argLine>-Xmx4G</argLine>
+                      <!-- Jenkins needs XML test reports to determine whether the build is stable. -->
+                      <disableXmlReport>false</disableXmlReport>
+                  </configuration>
+@@@ -448,14 -424,14 +449,25 @@@
+              <url>https://people.apache.org/repo/m1-ibiblio-rsync-repository/org.apache.axis2/</url>
+          </repository>
+          <repository>
+++<<<<<<< HEAD
+ +            <id>snapshots-nexus-repo</id>
+ +            <name>Nexus Snapshots Repo</name>
+ +            <url>http://nexus.onebusaway.org/content/repositories/snapshots/</url>
+ +        </repository>
+ +        <repository>
+ +            <id>releases-nexus-repo</id>
+ +            <name>Nexus Snapshots Repo</name>
+ +            <url>http://nexus.onebusaway.org/content/repositories/releases/</url>
+++=======
++           <id>sonatype-oss</id>
++           <name>Sonatype OSS</name>
++           <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
++         </repository>
++         <repository>
++             <id>conveyal</id>
++             <name>Conveyal Maven Repository</name>
++             <url>https://maven.conveyal.com/</url>
+++>>>>>>> origin/master
+          </repository>
+      </repositories>
+  
+@@@ -840,7 -799,7 +851,11 @@@
+          <dependency>
+              <groupId>com.conveyal</groupId>
+              <artifactId>r5</artifactId>
+++<<<<<<< HEAD
+ +            <version>0.1</version>
+++=======
++             <version>4.0.0-SNAPSHOT</version>
+++>>>>>>> origin/master
+              <exclusions>
+                  <exclusion>
+                      <artifactId>slf4j-simple</artifactId>
+diff --cc src/main/java/org/opentripplanner/graph_builder/linking/SimpleStreetSplitter.java
+index 67d32108a,7ecaffff2..000000000
+--- a/src/main/java/org/opentripplanner/graph_builder/linking/SimpleStreetSplitter.java
++++ b/src/main/java/org/opentripplanner/graph_builder/linking/SimpleStreetSplitter.java
+@@@ -95,12 -87,10 +95,12 @@@ public class SimpleStreetSplitter 
+      //If false new temporary edges are created and no edges are deleted (Used when searching for origin/destination)
+      private final boolean destructiveSplitting;
+  
+ +    private SubgraphForVertex subgraphs;
+ +
+      /**
+-      * Construct a new SimpleStreetSplitter. Be aware that only one SimpleStreetSplitter should be
+-      * active on a graph at any given time.
+-      * @param graph
++      * Construct a new SimpleStreetSplitter.
++      * NOTE: Only one SimpleStreetSplitter should be active on a graph at any given time.
++      *
+       * @param hashGridSpatialIndex If not null this index is used instead of creating new one
+       * @param transitStopIndex Index of all transitStops which is generated in {@link org.opentripplanner.routing.impl.StreetVertexIndexServiceImpl}
+       * @param destructiveSplitting If true splitting is permanent (Used when linking transit stops etc.) when false Splitting is only for duration of a request. Since they are made from temporary vertices and edges.
+@@@ -218,72 -200,19 +218,88 @@@
+              return 0;
+          });
+  
+++<<<<<<< HEAD
+ +        if (!candidateEdges.isEmpty() && vertex instanceof TransitStop) {
+ +            int distance = (int)SphericalDistanceLibrary.degreesToMeters(distances.get(candidateEdges.get(0).getId()));
+ +            if (distance > MIN_SNAP_DISTANCE_WARNING) {
+ +                LOG.info(String.format(graph.addBuilderAnnotation(new StopLinkedTooFar((TransitStop)vertex, distance))));
+ +            }
+ +            if (subgraphs != null) {
+ +                Vertex v = candidateEdges.get(0).getFromVertex();
+ +                Subgraph sg = subgraphs.getSubgraph(v);
+ +                if (sg != null && sg.streetSize() < 1000) {
+ +                    LOG.info(String.format(graph.addBuilderAnnotation(new StopLinkedToSubgraph((TransitStop)vertex, sg))));
+ +                }
+ +            }
+ +        }
+ +
+ +        List<TransitStop> candidateStops = new ArrayList<>();
+ +
+ +        // If we DO link to a transit stop(s) at this location, we should ALSO link to a street vertex, so things work for:
+ +        // * trips which shouldn't use this transit stop
+ +        // * one (or both) stop is not accessible (ie downtown accessible, uptown not.)
+ +        boolean stopAndStreetLink = canFindTransitStops && options != null && options.stopLinking;
+ +
+ +        if (stopAndStreetLink) {
+ +            Envelope narrowEnv = new Envelope(vertex.getCoordinate());
+ +            // Only show wheelchair messages if NO stops are accessible (e.g. uptown and downtown are both unusable)
+ +            List<String> messages = new ArrayList<>();
+ +            List<TransitStop> stops = (List<TransitStop>) transitStopIndex.query(narrowEnv);
+ +            for (TransitStop tstop : stops) {
+ +                if (SphericalDistanceLibrary.distance(tstop.getCoordinate(), vertex.getCoordinate()) < 1.0
+ +                        && tstop.getStop().getLocationType() == STOP_LOCATION_TYPE) {
+ +                    if (options.wheelchairAccessible) {
+ +                        AccessibilityResult result = isWheelchairAccessible(tstop, options);
+ +                        if (result.isAccessible()) {
+ +                            candidateStops.add(tstop);
+ +                        } else {
+ +                            if (!result.getAlerts().isEmpty())
+ +                                messages.add(String.format("%s is not wheelchair-accessible: %s",
+ +                                        tstop.getName(), result.getAlerts().get(0).alertDescriptionText));
+ +                            else
+ +                                messages.add(String.format("%s is not wheelchair-accessible.", tstop.getName()));
+ +                        }
+ +                    } else {
+ +                        candidateStops.add(tstop);
+ +                    }
+ +                }
+ +            }
+ +            if (!messages.isEmpty() && candidateStops.isEmpty()) {
+ +                for (String message : messages) {
+ +                    options.addPlanAlert(Alert.createSimpleAlerts(message, message));
+ +                }
+ +            }
+ +        }
+ +
+ +        // find the closest candidate edges
+ +        if (candidateEdges.isEmpty() || distances.get(candidateEdges.get(0).getId()) > radiusDeg || !candidateStops.isEmpty()) {
+ +            //We only link to stops if we are searching for origin/destination and for that we need transitStopIndex
+ +            if (!canFindTransitStops) {
+ +                return false;
+ +            }
+ +            LOG.debug("No street edge was found for {}", vertex);
+ +            //we search for closest stops (since this is only used in origin/destination linking if no edges were found)
+ +            //in same way as closest edges are found
+ +            if (candidateStops.isEmpty()) {
+ +                transitStopIndex.query(env).forEach(candidateStop ->
+ +                        candidateStops.add((TransitStop) candidateStop)
+ +                );
+ +            }
+++=======
++         // find the closest candidate edges
++         if (candidateEdges.isEmpty() || distances.get(candidateEdges.get(0).getId()) > radiusDeg) {
++             // We only link to stops if we are searching for origin/destination and for that we need transitStopIndex.
++             if (destructiveSplitting || transitStopIndex == null) {
++                 return false;
++             }
++             LOG.debug("No street edge was found for {}", vertex);
++             // We search for closest stops (since this is only used in origin/destination linking if no edges were found)
++             // in the same way the closest edges are found.
++             List<TransitStop> candidateStops = new ArrayList<>();
++             transitStopIndex.query(env).forEach(candidateStop ->
++                 candidateStops.add((TransitStop) candidateStop)
++             );
+++>>>>>>> origin/master
+  
+              final TIntDoubleMap stopDistances = new TIntDoubleHashMap();
+  
+@@@ -316,15 -244,12 +331,15 @@@
+                      bestStops.add(candidateStops.get(i++));
+                  } while (i < candidateStops.size() &&
+                      stopDistances.get(candidateStops.get(i).getIndex()) - stopDistances
+-                         .get(candidateStops.get(i - 1).getIndex()) < duplicateDeg);
++                         .get(candidateStops.get(i - 1).getIndex()) < DUPLICATE_WAY_EPSILON_DEGREES);
+  
+                  for (TransitStop stop: bestStops) {
+ -                    LOG.debug("Linking vertex to stop: {}", stop.getName());
+ +                    LOG.debug("Linking vertex {} to stop {}", vertex, stop.getStopId());
+                      makeTemporaryEdges((TemporaryStreetLocation)vertex, stop);
+                  }
+ +                if (stopAndStreetLink) {
+ +                    link(vertex, traverseMode, options, false);
+ +                }
+                  return true;
+              }
+          } else {
+@@@ -341,10 -266,9 +356,10 @@@
+                  bestEdges.add(candidateEdges.get(i++));
+              } while (i < candidateEdges.size() &&
+                  distances.get(candidateEdges.get(i).getId()) - distances
+-                     .get(candidateEdges.get(i - 1).getId()) < duplicateDeg);
++                     .get(candidateEdges.get(i - 1).getId()) < DUPLICATE_WAY_EPSILON_DEGREES);
+  
+              for (StreetEdge edge : bestEdges) {
+ +                LOG.debug("linking vertex {} to edge {}", vertex, edge);
+                  link(vertex, edge, xscale, options);
+              }
+  
+diff --cc src/main/java/org/opentripplanner/index/IndexAPI.java
+index da6d08506,0c220f687..000000000
+--- a/src/main/java/org/opentripplanner/index/IndexAPI.java
++++ b/src/main/java/org/opentripplanner/index/IndexAPI.java
+@@@ -679,10 -642,18 +695,27 @@@ public class IndexAPI 
+          return index.getGraphQLResponse(query, new HashMap<>(), null);
+      }
+  
+++<<<<<<< HEAD
+ +//    @GET
+ +//    @Path("/graphql")
+ +//    public Response getGraphQL (@QueryParam("query") String query,
+ +//                                @QueryParam("variables") HashMap<String, Object> variables) {
+ +//        return index.getGraphQLResponse(query, variables == null ? new HashMap<>() : variables);
+ +//    }
+++=======
++     /** Represents a transfer from a stop */
++     private static class Transfer {
++         /** The stop we are connecting to */
++         public String toStopId;
++         
++         /** the on-street distance of the transfer (meters) */
++         public double distance;
++         
++         /** Make a transfer from a simpletransfer edge from the graph. */
++         public Transfer(SimpleTransfer e) {
++             toStopId = GtfsLibrary.convertIdToString(((TransitStop) e.getToVertex()).getStopId());
++             distance = e.getDistance();
++         }
++     }
+++>>>>>>> origin/master
+  }
+diff --cc src/main/java/org/opentripplanner/routing/core/State.java
+index e8d594846,094bd12bc..000000000
+--- a/src/main/java/org/opentripplanner/routing/core/State.java
++++ b/src/main/java/org/opentripplanner/routing/core/State.java
+@@@ -25,7 -24,7 +24,11 @@@ import org.opentripplanner.routing.edge
+  import org.opentripplanner.routing.graph.Edge;
+  import org.opentripplanner.routing.graph.Vertex;
+  import org.opentripplanner.routing.trippattern.TripTimes;
+++<<<<<<< HEAD
+ +import org.opentripplanner.routing.vertextype.TransitVertex;
+++=======
++ import org.opentripplanner.routing.vertextype.BikeRentalStationVertex;
+++>>>>>>> origin/master
+  import org.slf4j.Logger;
+  import org.slf4j.LoggerFactory;
+  
+diff --cc src/main/java/org/opentripplanner/routing/graph/GraphIndex.java
+index faf48c528,6a79f028a..000000000
+--- a/src/main/java/org/opentripplanner/routing/graph/GraphIndex.java
++++ b/src/main/java/org/opentripplanner/routing/graph/GraphIndex.java
+@@@ -7,6 -7,7 +7,10 @@@ import java.util.List
+  import java.util.Map;
+  import java.util.Set;
+  import java.util.Calendar;
+++<<<<<<< HEAD
+++=======
++ 
+++>>>>>>> origin/master
+  import com.google.common.collect.HashMultimap;
+  import com.google.common.collect.Lists;
+  import com.google.common.collect.Maps;
+@@@ -605,22 -554,11 +609,27 @@@ public class GraphIndex 
+      }
+  
+      /**
+++<<<<<<< HEAD
+ +     * Stop clusters can be built in one of two ways, either by geographical proximity, or
+ +     * according to a parent/child station topology, if it exists.
+ +     *
+ +     * Some challenges faced by DC and Trimet:
+ +     * FIXME OBA parentStation field is a string, not an AgencyAndId, so it has no agency/feed scope
+ +     * But the DC regional graph has no parent stations pre-defined, so no use dealing with them for now.
+ +     * However Trimet stops have "landmark" or Transit Center parent stations, so we don't use the parent stop field.
+ +     *
+ +     * We can't use a similarity comparison, we need exact matches. This is because many street names differ by only
+ +     * one letter or number, e.g. 34th and 35th or Avenue A and Avenue B.
+ +     * Therefore normalizing the names before the comparison is essential.
+ +     * The agency must provide either parent station information or a well thought out stop naming scheme to cluster
+ +     * stops -- no guessing is reasonable without that information.
+++=======
++      * Stop clusters can be built in one of two ways, either by geographical proximity and name, or
++      * according to a parent/child station topology, if it exists.
+++>>>>>>> origin/master
+       */
+      public void clusterStops() {
+ -    	if (graph.stopClusterMode != null) {
+ +        if (graph.stopClusterMode != null) {
+              switch (graph.stopClusterMode) {
+                  case "parentStation":
+                      clusterByParentStation();
+@@@ -636,51 -574,74 +645,108 @@@
+          }
+      }
+  
+++<<<<<<< HEAD
+ +    private void clusterByProximity() {
+ +        int psIdx = 0; // unique index for next parent stop
+ +        LOG.info("Clustering stops by geographic proximity and name...");
+ +        // Each stop without a cluster will greedily claim other stops without clusters.
+ +        for (Stop s0 : stopForId.values()) {
+ +            if (stopClusterForStop.containsKey(s0)) continue; // skip stops that have already been claimed by a cluster
+ +            String s0normalizedName = StopNameNormalizer.normalize(s0.getName());
+ +            StopCluster cluster = new StopCluster(String.format("C%03d", psIdx++), s0normalizedName);
+ +            // LOG.info("stop {}", s0normalizedName);
+ +            // No need to explicitly add s0 to the cluster. It will be found in the spatial index query below.
+ +            Envelope env = new Envelope(new Coordinate(s0.getLon(), s0.getLat()));
+ +            env.expandBy(SphericalDistanceLibrary.metersToLonDegrees(CLUSTER_RADIUS, s0.getLat()),
+ +                    SphericalDistanceLibrary.metersToDegrees(CLUSTER_RADIUS));
+ +            for (TransitStop ts1 : stopSpatialIndex.query(env)) {
+ +                Stop s1 = ts1.getStop();
+ +                double geoDistance = SphericalDistanceLibrary.fastDistance(
+ +                        s0.getLat(), s0.getLon(), s1.getLat(), s1.getLon());
+ +                if (geoDistance < CLUSTER_RADIUS) {
+ +                    String s1normalizedName = StopNameNormalizer.normalize(s1.getName());
+ +                    // LOG.info("   --> {}", s1normalizedName);
+ +                    // LOG.info("       geodist {} stringdist {}", geoDistance, stringDistance);
+ +                    if (s1normalizedName.equals(s0normalizedName)) {
+ +                        // Create a bidirectional relationship between the stop and its cluster
+ +                        cluster.children.add(s1);
+ +                        stopClusterForStop.put(s1, cluster);
+ +                    }
+ +                }
+ +            }
+ +            cluster.computeCenter();
+ +            stopClusterForId.put(cluster.id, cluster);
+ +        }
+++=======
++     /**
++      * Cluster stops by proximity and name.
++      * This functionality was developed for the Washington, DC area and probably will not work anywhere else in the
++      * world. It depends on the exact way stops are named and the way street intersections are named in that geographic
++      * region and in the GTFS data sets which represent it. Based on comments, apparently it might work for TriMet
++      * as well.
++      *
++      * We can't use a name similarity comparison, we need exact matches. This is because many street names differ by
++      * only one letter or number, e.g. 34th and 35th or Avenue A and Avenue B. Therefore normalizing the names before
++      * the comparison is essential. The agency must provide either parent station information or a well thought out stop
++      * naming scheme to cluster stops -- no guessing is reasonable without that information.
++      */
++     private void clusterByProximityAndName() {
++     	int psIdx = 0; // unique index for next parent stop
++ 	    LOG.info("Clustering stops by geographic proximity and name...");
++ 	    // Each stop without a cluster will greedily claim other stops without clusters.
++ 	    for (Stop s0 : stopForId.values()) {
++ 	        if (stopClusterForStop.containsKey(s0)) continue; // skip stops that have already been claimed by a cluster
++ 	        String s0normalizedName = StopNameNormalizer.normalize(s0.getName());
++ 	        StopCluster cluster = new StopCluster(String.format("C%03d", psIdx++), s0normalizedName);
++ 	        // LOG.info("stop {}", s0normalizedName);
++ 	        // No need to explicitly add s0 to the cluster. It will be found in the spatial index query below.
++ 	        Envelope env = new Envelope(new Coordinate(s0.getLon(), s0.getLat()));
++ 	        env.expandBy(SphericalDistanceLibrary.metersToLonDegrees(CLUSTER_RADIUS, s0.getLat()),
++ 	                SphericalDistanceLibrary.metersToDegrees(CLUSTER_RADIUS));
++ 	        for (TransitStop ts1 : stopSpatialIndex.query(env)) {
++ 	            Stop s1 = ts1.getStop();
++ 	            double geoDistance = SphericalDistanceLibrary.fastDistance(
++ 	                    s0.getLat(), s0.getLon(), s1.getLat(), s1.getLon());
++ 	            if (geoDistance < CLUSTER_RADIUS) {
++ 	                String s1normalizedName = StopNameNormalizer.normalize(s1.getName());
++ 	                // LOG.info("   --> {}", s1normalizedName);
++ 	                // LOG.info("       geodist {} stringdist {}", geoDistance, stringDistance);
++ 	                if (s1normalizedName.equals(s0normalizedName)) {
++ 	                    // Create a bidirectional relationship between the stop and its cluster
++ 	                    cluster.children.add(s1);
++ 	                    stopClusterForStop.put(s1, cluster);
++ 	                }
++ 	            }
++ 	        }
++ 	        cluster.computeCenter();
++ 	        stopClusterForId.put(cluster.id, cluster);
++ 	    }
+++>>>>>>> origin/master
+      }
++ 
++     /**
++      * Rather than using the names and geographic locations of stops to cluster them, group them by their declared
++      * parent station in the GTFS data. This should be a much more reliable method where these fields have been
++      * included in the GTFS data. However:
++      *
++      * FIXME OBA parentStation field is a string, not an AgencyAndId, so it has no agency/feed scope.
++      * That means it would only work reliably if there is only one GTFS feed loaded.
++      * The DC regional graph has no parent stations pre-defined, so we use the alternative proximity / name method.
++      * Trimet stops have "landmark" or Transit Center parent stations, so we don't use the parent stop field.
++      */
+      private void clusterByParentStation() {
+          LOG.info("Clustering stops by parent station...");
+ -    	for (Stop stop : stopForId.values()) {
+ -    	    String ps = stop.getParentStation();
+ -    	    if (ps == null || ps.isEmpty()) {
+ -    	        continue;
+ -    	    }
+ -    	    StopCluster cluster;
+ -    	    if (stopClusterForId.containsKey(ps)) {
+ -    	        cluster = stopClusterForId.get(ps);
+ -    	    } else {
+ -    	        cluster = new StopCluster(ps, stop.getName());
+ -    	        Stop parent = graph.parentStopById.get(new AgencyAndId(stop.getId().getAgencyId(), ps));
+ +        for (Stop stop : stopForId.values()) {
+ +            String ps = stop.getParentStation();
+ +            if (ps == null || ps.isEmpty()) {
+ +                continue;
+ +            }
+ +            StopCluster cluster;
+ +            if (stopClusterForId.containsKey(ps)) {
+ +                cluster = stopClusterForId.get(ps);
+ +            } else {
+ +                cluster = new StopCluster(ps, stop.getName());
+ +                Stop parent = graph.parentStopById.get(new AgencyAndId(stop.getId().getAgencyId(), ps));
+                  cluster.setCoordinates(parent.getLat(), parent.getLon());
+                  stopClusterForId.put(ps, cluster);
+  
+diff --cc src/main/java/org/opentripplanner/routing/vertextype/BikeRentalStationVertex.java
+index f29c299a5,c84fe6151..000000000
+--- a/src/main/java/org/opentripplanner/routing/vertextype/BikeRentalStationVertex.java
++++ b/src/main/java/org/opentripplanner/routing/vertextype/BikeRentalStationVertex.java
+@@@ -69,8 -74,13 +74,20 @@@ public class BikeRentalStationVertex ex
+          this.id = id;
+      }
+  
+++<<<<<<< HEAD
+ +    @Override
+ +    public boolean shouldLinkToStreet() {
+ +        return true;
+ +    }
+++=======
++     /**
++      * Tell the routing algorithm what kind of vehicle is being rented or dropped off here.
++      * Some car rental systems and flex transit systems work exactly like bike rental, but with cars.
++      * We can model them as bike rental systems by changing only this one detail.
++      */
++     public TraverseMode getVehicleMode () {
++          return isCarStation ? TraverseMode.CAR : TraverseMode.BICYCLE;
++     }
++ 
+++>>>>>>> origin/master
+  }
+diff --cc src/main/java/org/opentripplanner/standalone/GrizzlyServer.java
+index 9cb625030,62f02bb37..000000000
+--- a/src/main/java/org/opentripplanner/standalone/GrizzlyServer.java
++++ b/src/main/java/org/opentripplanner/standalone/GrizzlyServer.java
+@@@ -58,52 -74,16 +75,59 @@@ public class GrizzlyServer 
+          sslConfig.setKeyStoreFile(new File(params.basePath, "keystore").getAbsolutePath());
+          sslConfig.setKeyStorePass("opentrip");
+  
+++<<<<<<< HEAD
+ +
+ +        int threadPoolMaxPoolSize = Runtime.getRuntime().availableProcessors();
+ +        if (System.getProperty("otp.threadPoolMaxPoolSize") != null) {
+ +            try {
+ +                threadPoolMaxPoolSize = Integer.parseInt(System.getProperty("otp.threadPoolMaxPoolSize"));
+ +                LOG.info("Thread pool size override to " + threadPoolMaxPoolSize);
+ +            } catch (NumberFormatException nfe) {
+ +                // ignore
+ +            }
+ +        }
+ +        /* OTP is CPU-bound, so we want only as many worker threads as we have cores. */
+ +        ThreadPoolConfig threadPoolConfig = ThreadPoolConfig.defaultConfig()
+ +            .setCorePoolSize(threadPoolMaxPoolSize)
+ +            .setMaxPoolSize(threadPoolMaxPoolSize);
+ +
+ +        if (System.getProperty("otp.threadPoolQueueLimit") != null) {
+ +            int threadPoolQueueLimit = Integer.parseInt(System.getProperty("otp.threadPoolQueueLimit"));
+ +            LOG.info("threadPoolQueueLimit = {}", threadPoolQueueLimit);
+ +            threadPoolConfig.setQueueLimit(threadPoolQueueLimit); // force QueueLimitedThreadPool
+ +        } else {
+ +            LOG.info("threadPoolQueueLimit = {}", -1);
+ +            threadPoolConfig.setQueueLimit(-1); // coerce FixedThreadPool
+ +        }
+ +
+ +        LOG.info("Thread pool size = " + threadPoolConfig.getMaxPoolSize());
+++=======
++         /* Set up a pool of threads to handle incoming HTTP requests. */
++         // TODO we should probably use Grizzly async processing rather than tying up the HTTP handler threads.
++         ThreadPoolConfig threadPoolConfig = ThreadPoolConfig.defaultConfig()
++             .setCorePoolSize(MIN_THREADS)
++             .setMaxPoolSize(getMaxThreads());
+++>>>>>>> origin/master
+  
+          /* HTTP (non-encrypted) listener */
+          NetworkListener httpListener = new NetworkListener("otp_insecure", params.bindAddress, params.port);
+-         // OTP is CPU-bound, we don't want more threads than cores. TODO: We should switch to async handling.
+          httpListener.setSecure(false);
+  
+ +        if (System.getProperty("otp.transport_same_thread") != null
+ +                && "true".equalsIgnoreCase(System.getProperty("otp.transport_same_thread"))) {
+ +            // NOTE:  if this is set it undoes the pool configuration above
+ +            LOG.info("using SameThreadIOStrategy transport policy.  Thread Pool Config will be ignored");
+ +            httpListener.getTransport().setIOStrategy(SameThreadIOStrategy.getInstance());
+ +        } else {
+ +            LOG.info("defaulting to normal transport policy");
+ +        }
+ +
+ +        if (System.getProperty("otp.transport_backlog") != null) {
+ +            int backlog = Integer.parseInt(System.getProperty("otp.transport_backlog"));
+ +            LOG.info("setting transport backlog to {}", backlog);
+ +            httpListener.getTransport().setServerConnectionBackLog(backlog);
+ +        }
+ +
+          /* HTTPS listener */
+          NetworkListener httpsListener = new NetworkListener("otp_secure", params.bindAddress, params.securePort);
+          // Ideally we'd share the threads between HTTP and HTTPS.
+@@@ -131,31 -111,23 +155,28 @@@
+          HttpHandler dynamicHandler = ContainerFactory.createContainer(HttpHandler.class, app);
+          httpServer.getServerConfiguration().addHttpHandler(dynamicHandler, "/otp/");
+  
+ -        /* 2. A static content handler to serve the client JS apps etc. from the classpath. */
+ -        CLStaticHttpHandler staticHandler = new CLStaticHttpHandler(GrizzlyServer.class.getClassLoader(), "/client/");
+ -        if (params.disableFileCache) {
+ -            LOG.info("Disabling HTTP server static file cache.");
+ -            staticHandler.setFileCacheEnabled(false);
+ +        if (!params.disableNativeClient) {
+ +            /* 2. A static content handler to serve the client JS apps etc. from the classpath. */
+ +            CLStaticHttpHandler staticHandler = new CLStaticHttpHandler(GrizzlyServer.class.getClassLoader(), "/client/");
+ +            if (params.disableFileCache) {
+ +                LOG.info("Disabling HTTP server static file cache.");
+ +                staticHandler.setFileCacheEnabled(false);
+ +            }
+ +            httpServer.getServerConfiguration().addHttpHandler(staticHandler, "/");
+ +        } else {
+ +            LOG.info("disabling native UI");
+          }
+ -        httpServer.getServerConfiguration().addHttpHandler(staticHandler, "/");
+  
+-         /*
+-          * 3. A static content handler to serve local files from the filesystem, under the "local"
+-          * path.
+-          */
++         /* 3. A static content handler to serve local files from the filesystem, under the "local" path. */
+          if (params.clientDirectory != null) {
+              StaticHttpHandler localHandler = new StaticHttpHandler(
+                      params.clientDirectory.getAbsolutePath());
+              localHandler.setFileCacheEnabled(false);
+ -            httpServer.getServerConfiguration().addHttpHandler(localHandler, "/local");
+ +            httpServer.getServerConfiguration().addHttpHandler(localHandler, params.clientPath);
+ +            LOG.info("deploying " + params.clientDirectory + " to path " + params.clientPath);
+          }
+  
+-         /* 3. Test alternate method (no Jersey). */
++         /* 3. Test alternate HTTP handling without Jersey. */
+          // As in servlets, * is needed in base path to identify the "rest" of the path.
+          // GraphService gs = (GraphService) iocFactory.getComponentProvider(GraphService.class).getInstance();
+          // Graph graph = gs.getGraph();
