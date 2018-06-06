@@ -128,3 +128,7 @@ git diff opentripplanner/master --dirstat=files
    3.7% src/test/java/org/opentripplanner/routing/
    3.3% src/test/java/org/opentripplanner/
 ```
+
+----
+
+[Edit this page](https://github.com/interline-io/unifying-opentripplanner/edit/master/README.md)
