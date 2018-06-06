@@ -1,0 +1,20 @@
+# place in .git/config
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+[remote "opentripplanner"]
+	url = git@github.com:opentripplanner/OpenTripPlanner.git
+	fetch = +refs/heads/*:refs/remotes/opentripplanner/*
+[remote "camsys"]
+	url = git@github.com:camsys/OpenTripPlanner.git
+	fetch = +refs/heads/*:refs/remotes/camsys/*
+[remote "entur"]
+	url = git@github.com:entur/OpenTripPlanner.git
+	fetch = +refs/heads/*:refs/remotes/entur/*
+[branch "master"]
+	remote = opentripplanner
+	merge = refs/heads/master
