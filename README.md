@@ -29,6 +29,8 @@ graph LR
 
 ## Branches by directories and files changed
 
+To work with all of these branches and forks locally, here's a [git config file](sample-git-config).
+
 ## entur:split_gtfs_and_internal_model
 
 [Conflicts with opentripplanner:master](upstream-merge-diffs/entur.split_gtfs_and_internal_model+conveyal.master.diff)
